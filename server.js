@@ -145,7 +145,7 @@ function fetch(url, options = {}) {
 }
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8383;
 
 // ============================================================
 // 配置（API Key 安全存储在后端，不暴露给前端）
