@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>渔村智慧助手</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        :root {
+            --primary: #1a73e8;
+            --primary-dark: #1557b0;
+            --danger: #e53935;
+            --warning: #ff9800;
+            --success: #43a047;
+            --bg: #f5f7fa;
+            --card: #ffffff;
+            --text: #1a1a2e;
+            --text-sub: #666;
+            --border: #e8eaed;
+            --radius: 16px;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding-bottom: 80px;
+            overflow-x: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #1565c0, #1a73e8);
+            color: white;
+            padding: 16px 20px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        .header h1 { font-size: 20px; font-weight: 600; }
+        .header p { font-size: 13px; opacity: 0.85; margin-top: 2px; }
+        .header .loc-info { font-size: 11px; opacity: 0.7; margin-top: 2px; }
+
+        .page { display: none; padding: 16px; animation: fadeIn 0.25s ease; }
+        .page.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        .home-cards { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+        .home-card {
+            background: var(--card); border-radius: var(--radius); padding: 24px 20px;
+            display: flex; align-items: center; gap: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+            border: none; width: 100%; text-align: left;
+        }
+        .home-card:active { transform: scale(0.98); }
+        .home-card .icon {
+            width: 56px; height: 56px; border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 28px; flex-shrink: 0;
+        }
+        .home-card .icon.price { background: #e8f0fe; }
+        .home-card .icon.weather { background: #fff3e0; }
+        .home-card .icon.disease { background: #e8f5e9; }
+        .home-card .info h2 { font-size: 17px; font-weight: 600; margin-bottom: 4px; }
+        .home-card .info p { font-size: 13px; color: var(--text-sub); line-height: 1.4; }
+
+        .card {
+            background: var(--card); border-radius: var(--radius); padding: 20px;
+            margin-bottom: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .card-title { font-size: 16px; font-weight: 600; margin-bottom: 12px; }
+        .back-btn {
+            background: none; border: none; color: white; font-size: 15px;
+            cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 0; margin-bottom: 12px;
+        }
+        .back-btn::before { content: "‹"; font-size: 22px; font-weight: 700; }
+
+        .loading-wrap { display: flex; align-items: center; justify-content: center; padding: 40px 0; }
+        .spinner {
+            width: 32px; height: 32px; border: 3px solid var(--border);
+            border-top-color: var(--primary); border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text { margin-left: 12px; font-size: 14px; color: var(--text-sub); }
+
+        .error-msg { text-align: center; padding: 20px; color: var(--text-sub); font-size: 14px; }
+        .error-msg .retry-btn {
+            margin-top: 12px; padding: 8px 24px; border: 1px solid var(--primary);
+            background: none; color: var(--primary); border-radius: 20px;
+            font-size: 14px; cursor: pointer;
+        }
+
+        /* 首页状态卡片 */
+        .home-status {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px;
+        }
+        .status-card {
+            background: var(--card); border-radius: 12px; padding: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+        .status-card .s-label { font-size: 11px; color: var(--text-sub); margin-bottom: 6px; }
+        .status-card .s-value { font-size: 20px; font-weight: 700; }
+        .status-card .s-sub { font-size: 12px; color: var(--text-sub); margin-top: 4px; }
+
+        /* 价格预测页 */
+        .price-summary {
+            display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 16px;
+        }
+        .price-stat { text-align: center; padding: 14px 8px; background: var(--bg); border-radius: 12px; }
+        .price-stat .label { font-size: 12px; color: var(--text-sub); margin-bottom: 6px; }
+        .price-stat .value { font-size: 22px; font-weight: 700; }
+        .price-stat .value.up { color: var(--danger); }
+        .price-stat .value.down { color: var(--success); }
+        .chart-wrap { position: relative; height: 220px; }
+        .advice-item {
+            display: flex; align-items: flex-start; gap: 12px;
+            padding: 14px 0; border-bottom: 1px solid var(--border);
+        }
+        .advice-item:last-child { border-bottom: none; }
+        .advice-badge {
+            flex-shrink: 0; padding: 4px 10px; border-radius: 20px;
+            font-size: 12px; font-weight: 600; color: white; margin-top: 2px;
+        }
+        .advice-badge.sell { background: var(--danger); }
+        .advice-badge.hold { background: var(--warning); }
+        .advice-badge.buy { background: var(--success); }
+        .advice-text { font-size: 14px; line-height: 1.5; }
+
+        /* 天气页 */
+        .weather-now { display: flex; align-items: center; gap: 16px; padding: 8px 0 16px; }
+        .weather-now .temp { font-size: 48px; font-weight: 300; }
+        .weather-now .desc { font-size: 15px; color: var(--text-sub); line-height: 1.5; }
+        .weather-detail {
+            display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+            padding-top: 12px; border-top: 1px solid var(--border);
+        }
+        .weather-detail .item { text-align: center; }
+        .weather-detail .item .dlabel { font-size: 11px; color: var(--text-sub); margin-bottom: 4px; }
+        .weather-detail .item .dval { font-size: 14px; font-weight: 600; }
+
+        .risk-bar { height: 8px; border-radius: 4px; background: #e0e0e0; margin: 14px 0 8px; overflow: hidden; }
+        .risk-bar .fill { height: 100%; border-radius: 4px; transition: width 0.5s; }
+        .risk-label { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-sub); }
+        .risk-status {
+            display: flex; align-items: center; gap: 10px;
+            padding: 14px 16px; border-radius: 12px; margin-top: 14px; font-size: 15px; font-weight: 500;
+        }
+        .risk-status.safe { background: #e8f5e9; color: #2e7d32; }
+        .risk-status.warn { background: #fff3e0; color: #e65100; }
+        .risk-status.danger { background: #ffebee; color: #c62828; }
+        .risk-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+        .risk-dot.safe { background: var(--success); }
+        .risk-dot.warn { background: var(--warning); animation: blink 1.2s infinite; }
+        .risk-dot.danger { background: var(--danger); animation: blink 0.6s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+        .forecast-scroll {
+            display: flex; gap: 10px; overflow-x: auto; padding: 4px 0 8px;
+            -webkit-overflow-scrolling: touch;
+        }
+        .forecast-scroll::-webkit-scrollbar { display: none; }
+        .forecast-item {
+            flex-shrink: 0; text-align: center; padding: 14px 12px;
+            background: var(--bg); border-radius: 12px; min-width: 80px;
+        }
+        .forecast-item.today { background: #e8f0fe; }
+        .forecast-item .f-date { font-size: 12px; color: var(--text-sub); }
+        .forecast-item .f-icon { font-size: 26px; margin: 8px 0; }
+        .forecast-item .f-temp { font-size: 13px; font-weight: 600; }
+        .forecast-item .f-temp span { color: var(--text-sub); font-weight: 400; }
+        .forecast-item .f-weather { font-size: 11px; color: var(--text-sub); margin-top: 4px; }
+        .forecast-item .f-rain { font-size: 12px; color: var(--primary); font-weight: 600; margin-top: 2px; }
+
+        .rain-detail { margin-top: 12px; }
+        .rain-detail .rain-row {
+            display: flex; align-items: center;
+            padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 14px;
+        }
+        .rain-detail .rain-row:last-child { border-bottom: none; }
+        .rain-bar-wrap { flex: 1; margin: 0 12px; height: 6px; background: #e0e0e0; border-radius: 3px; }
+        .rain-bar-inner { height: 100%; border-radius: 3px; transition: width 0.5s; }
+        .rain-val { min-width: 70px; text-align: right; font-weight: 600; }
+
+        .priority-tag {
+            display: inline-block; padding: 1px 6px; border-radius: 6px;
+            font-size: 11px; font-weight: 600; margin-right: 6px;
+        }
+        .priority-紧急 { background: #ffebee; color: #c62828; }
+        .priority-重要 { background: #fff3e0; color: #e65100; }
+        .priority-建议 { background: #e8f0fe; color: #1a73e8; }
+        .priority-提醒 { background: #f5f5f5; color: #666; }
+        .priority-日常 { background: #e8f5e9; color: #2e7d32; }
+
+        /* 病虫害诊断 */
+        .symptom-section { margin-bottom: 16px; }
+        .symptom-section .sec-title { font-size: 14px; font-weight: 600; margin-bottom: 10px; color: var(--text-sub); }
+        .symptom-tags { display: flex; flex-wrap: wrap; gap: 8px; }
+        .symptom-tag {
+            padding: 10px 16px; border-radius: 24px; border: 2px solid var(--border);
+            font-size: 14px; background: var(--card); cursor: pointer;
+            transition: all 0.15s; user-select: none;
+        }
+        .symptom-tag:active { transform: scale(0.96); }
+        .symptom-tag.selected { border-color: var(--primary); background: #e8f0fe; color: var(--primary); font-weight: 500; }
+        .diagnose-btn {
+            width: 100%; padding: 16px; border-radius: 12px; border: none;
+            background: linear-gradient(135deg, #1565c0, #1a73e8); color: white;
+            font-size: 17px; font-weight: 600; cursor: pointer; margin-top: 8px;
+            transition: opacity 0.15s;
+        }
+        .diagnose-btn:active { opacity: 0.85; }
+        .diagnose-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .result-card { display: none; animation: fadeIn 0.3s ease; border-left: 4px solid var(--primary); }
+        .result-card.show { display: block; }
+        .result-card.danger-border { border-left-color: var(--danger); }
+        .result-name { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+        .result-severity {
+            display: inline-block; padding: 3px 10px; border-radius: 12px;
+            font-size: 12px; font-weight: 600; margin-bottom: 12px;
+        }
+        .result-severity.low { background: #e8f5e9; color: #2e7d32; }
+        .result-severity.mid { background: #fff3e0; color: #e65100; }
+        .result-severity.high { background: #ffebee; color: #c62828; }
+        .result-section { margin-bottom: 12px; }
+        .result-section h4 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+        .result-section p { font-size: 14px; line-height: 1.7; color: #444; white-space: pre-line; }
+        .ai-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            background: linear-gradient(135deg, #667eea, #764ba2); color: white;
+            padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+            margin-bottom: 12px;
+        }
+        .ai-time { font-size: 11px; color: var(--text-sub); margin-bottom: 12px; }
+        .report-btn {
+            width: 100%; padding: 14px; border-radius: 12px; border: 2px solid var(--danger);
+            background: white; color: var(--danger); font-size: 15px; font-weight: 600;
+            cursor: pointer; margin-top: 12px; transition: all 0.15s;
+        }
+        .report-btn:active { background: var(--danger); color: white; }
+
+        .bottom-nav {
+            position: fixed; bottom: 0; left: 0; right: 0;
+            background: white; border-top: 1px solid var(--border);
+            display: flex; padding: 6px 0; padding-bottom: max(6px, env(safe-area-inset-bottom));
+            z-index: 100;
+        }
+        .nav-item {
+            flex: 1; display: flex; flex-direction: column; align-items: center;
+            gap: 2px; padding: 6px 0; cursor: pointer; border: none; background: none;
+            color: var(--text-sub); font-size: 11px;
+        }
+        .nav-item .nav-icon { font-size: 22px; }
+        .nav-item.active { color: var(--primary); }
+
+        .modal-overlay {
+            display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+            z-index: 200; align-items: center; justify-content: center; padding: 20px;
+        }
+        .modal-overlay.show { display: flex; }
+        .modal {
+            background: white; border-radius: 20px; padding: 24px;
+            max-width: 340px; width: 100%; animation: fadeIn 0.2s ease;
+        }
+        .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+        .modal p { font-size: 14px; line-height: 1.6; color: #555; margin-bottom: 16px; }
+        .modal-actions { display: flex; gap: 10px; }
+        .modal-actions button {
+            flex: 1; padding: 12px; border-radius: 10px; border: none;
+            font-size: 15px; font-weight: 600; cursor: pointer;
+        }
+        .modal-actions .cancel { background: var(--bg); color: var(--text); }
+        .modal-actions .confirm { background: var(--danger); color: white; }
+
+        .toast {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+            background: #323232; color: white; padding: 12px 24px;
+            border-radius: 24px; font-size: 14px; z-index: 300;
+            opacity: 0; transition: opacity 0.3s; pointer-events: none;
+        }
+        .toast.show { opacity: 1; }
+    </style>
+</head>
+<body>
+
+<div class="header" id="header">
+    <div id="header-home">
+        <h1>🐟 渔村智慧助手</h1>
+        <p>平谷区 · 千人百村</p>
+        <div class="loc-info" id="locInfo">正在初始化...</div>
+    </div>
+    <div id="header-sub" style="display:none">
+        <button class="back-btn" onclick="goHome()">返回</button>
+        <h1 id="sub-title"></h1>
+    </div>
+</div>
+
+<!-- ========== 首页 ========== -->
+<div class="page active" id="page-home">
+    <!-- 首页快捷状态 -->
+    <div class="home-status">
+        <div class="status-card" onclick="showPage('weather')">
+            <div class="s-label">🌊 当前天气</div>
+            <div class="s-value" id="homeTemp">--</div>
+            <div class="s-sub" id="homeWeather">加载中</div>
+        </div>
+        <div class="status-card">
+            <div class="s-label">🚨 洪涝风险</div>
+            <div class="s-value" id="homeRisk">--</div>
+            <div class="s-sub" id="homeRiskSub">加载中</div>
+        </div>
+    </div>
+
+    <div class="home-cards">
+        <button class="home-card" onclick="showPage('price')">
+            <div class="icon price">📈</div>
+            <div class="info">
+                <h2>鱼价预测</h2>
+                <p>查看今日鱼价、未来走势和放养建议</p>
+            </div>
+        </button>
+        <button class="home-card" onclick="showPage('weather')">
+            <div class="icon weather">🌊</div>
+            <div class="info">
+                <h2>暴雨预警</h2>
+                <p>实时天气监测，洪水风险提前知道</p>
+            </div>
+        </button>
+        <button class="home-card" onclick="showPage('disease')">
+            <div class="icon disease">🐟</div>
+            <div class="info">
+                <h2>鱼病诊断</h2>
+                <p>AI 智能分析症状，给出诊断和治疗方案</p>
+            </div>
+        </button>
+    </div>
+</div>
+
+<!-- ========== 鱼价预测页 ========== -->
+<div class="page" id="page-price">
+    <div class="card">
+        <div class="card-title">今日鱼价（元/斤）<span style="font-size:12px;color:#999;font-weight:400;margin-left:8px">模拟数据</span></div>
+        <div class="price-summary">
+            <div class="price-stat">
+                <div class="label">鲤鱼</div>
+                <div class="value up">8.5</div>
+            </div>
+            <div class="price-stat">
+                <div class="label">草鱼</div>
+                <div class="value down">7.2</div>
+            </div>
+            <div class="price-stat">
+                <div class="label">鲫鱼</div>
+                <div class="value up">11.0</div>
+            </div>
+        </div>
+        <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-title">💡 放养建议</div>
+        <div class="advice-item">
+            <span class="advice-badge sell">建议出塘</span>
+            <span class="advice-text">鲤鱼近期价格处于高位，预计下周回落，建议3天内择机出塘。</span>
+        </div>
+        <div class="advice-item">
+            <span class="advice-badge hold">观望</span>
+            <span class="advice-text">草鱼价格走低，预计8月中旬回暖，建议暂时囤塘。</span>
+        </div>
+        <div class="advice-item">
+            <span class="advice-badge buy">适合补苗</span>
+            <span class="advice-text">鲫鱼价格稳中有升，当前适合投放鲫鱼苗，预计国庆前后出塘收益较好。</span>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-title">📊 说明</div>
+        <p style="font-size:13px;color:#666;line-height:1.7">
+            鱼价模块暂用模拟数据演示。接入真实数据源后（如每日手动录入或爬取水产网站行情），将替换为实际价格和 AI 预测走势。
+        </p>
+    </div>
+</div>
+
+<!-- ========== 暴雨预警页 ========== -->
+<div class="page" id="page-weather">
+    <div class="card" id="weatherCurrentCard">
+        <div class="card-title">📍 <span id="weatherCity">加载中...</span> · 实时天气</div>
+        <div id="weatherContent">
+            <div class="loading-wrap"><div class="spinner"></div><span class="loading-text">正在获取天气数据...</span></div>
+        </div>
+    </div>
+    <div class="card" id="forecastCard">
+        <div class="card-title">📅 未来天气预报</div>
+        <div id="forecastContent">
+            <div class="loading-wrap"><div class="spinner"></div><span class="loading-text">加载中...</span></div>
+        </div>
+    </div>
+    <div class="card" id="riskCard">
+        <div class="card-title">🚨 洪涝风险评估</div>
+        <div id="riskContent">
+            <div class="loading-wrap"><div class="spinner"></div><span class="loading-text">分析中...</span></div>
+        </div>
+    </div>
+</div>
+
+<!-- ========== 鱼病诊断页 ========== -->
+<div class="page" id="page-disease">
+    <div class="card">
+        <div class="card-title">🔍 选择你观察到的症状</div>
+        <p style="font-size:13px;color:#666;margin-bottom:14px">可以多选，选得越准确，AI 诊断越靠谱</p>
+
+        <div class="symptom-section">
+            <div class="sec-title">🐟 体表症状</div>
+            <div class="symptom-tags">
+                <span class="symptom-tag" data-id="体表出血">体表出血</span>
+                <span class="symptom-tag" data-id="鳞片脱落">鳞片脱落</span>
+                <span class="symptom-tag" data-id="体表有白点">体表有白点</span>
+                <span class="symptom-tag" data-id="体表有棉絮状物">体表有棉絮状物</span>
+                <span class="symptom-tag" data-id="鳃丝发白">鳃丝发白</span>
+                <span class="symptom-tag" data-id="肛门红肿">肛门红肿</span>
+                <span class="symptom-tag" data-id="眼睛浑浊凸出">眼睛浑浊凸出</span>
+                <span class="symptom-tag" data-id="鳍条腐烂">鳍条腐烂</span>
+            </div>
+        </div>
+        <div class="symptom-section">
+            <div class="sec-title">🤔 行为异常</div>
+            <div class="symptom-tags">
+                <span class="symptom-tag" data-id="浮头张嘴呼吸">浮头（张嘴呼吸）</span>
+                <span class="symptom-tag" data-id="在水面打转狂游">在水面打转</span>
+                <span class="symptom-tag" data-id="独游离群">独游、离群</span>
+                <span class="symptom-tag" data-id="食欲下降">食欲下降</span>
+                <span class="symptom-tag" data-id="跳跃不安">跳跃不安</span>
+                <span class="symptom-tag" data-id="身体失去平衡侧翻">身体侧翻</span>
+            </div>
+        </div>
+        <div class="symptom-section">
+            <div class="sec-title">🌊 水体状况</div>
+            <div class="symptom-tags">
+                <span class="symptom-tag" data-id="水色发黑发臭">水色发黑发臭</span>
+                <span class="symptom-tag" data-id="水面大量泡沫">水面大量泡沫</span>
+                <span class="symptom-tag" data-id="水中溶氧低">溶氧偏低</span>
+                <span class="symptom-tag" data-id="水体浑浊">水体浑浊</span>
+            </div>
+        </div>
+        <div class="symptom-section">
+            <div class="sec-title">💬 补充描述（可选）</div>
+            <textarea id="extraDesc" placeholder="比如：养的是草鱼，最近刚下过雨，死了十几条..." style="
+                width:100%; height:80px; border:2px solid var(--border); border-radius:12px;
+                padding:12px; font-size:14px; resize:none; font-family:inherit;
+                outline:none; transition: border-color 0.2s;
+            " onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+        </div>
+        <button class="diagnose-btn" id="diagnoseBtn" disabled onclick="aiDiagnose()">AI 智能诊断</button>
+    </div>
+
+    <div class="card result-card" id="resultCard">
+        <div class="ai-badge">🤖 DeepSeek AI 诊断</div>
+        <div class="ai-time" id="aiTime"></div>
+        <div class="result-name" id="resultName"></div>
+        <span class="result-severity" id="resultSeverity"></span>
+        <div class="result-section">
+            <h4>病害分析</h4>
+            <p id="resultDesc"></p>
+        </div>
+        <div class="result-section">
+            <h4>💊 治疗方案</h4>
+            <p id="resultTreatment"></p>
+        </div>
+        <div class="result-section">
+            <h4>⚠️ 注意事项</h4>
+            <p id="resultNote"></p>
+        </div>
+        <button class="report-btn" id="reportBtn" onclick="showReportModal()" style="display:none">
+            🏛️ 一键上报乡镇政府
+        </button>
+    </div>
+</div>
+
+<div class="bottom-nav">
+    <button class="nav-item active" onclick="goHome()">
+        <span class="nav-icon">🏠</span><span>首页</span>
+    </button>
+    <button class="nav-item" onclick="showPage('price')">
+        <span class="nav-icon">📈</span><span>鱼价</span>
+    </button>
+    <button class="nav-item" onclick="showPage('weather')">
+        <span class="nav-icon">🌊</span><span>预警</span>
+    </button>
+    <button class="nav-item" onclick="showPage('disease')">
+        <span class="nav-icon">🐟</span><span>诊断</span>
+    </button>
+</div>
+
+<div class="modal-overlay" id="reportModal">
+    <div class="modal">
+        <h3>🏛️ 确认上报政府？</h3>
+        <p>将把 AI 诊断结果（含病害类型、严重程度、建议措施）发送至平谷区农业农村局。</p>
+        <div class="modal-actions">
+            <button class="cancel" onclick="closeReportModal()">取消</button>
+            <button class="confirm" onclick="confirmReport()">确认上报</button>
+        </div>
+    </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ============================================================
+// 全局状态
+// ============================================================
+let currentAdcode = '110117';
+let currentCity = '平谷区';
+let lastDiagnosis = null; // 保存最近一次诊断结果，用于上报
+
+// ============================================================
+// 页面导航
+// ============================================================
+const pageTitles = { price: '📈 鱼价预测', weather: '🌊 暴雨预警', disease: '🐟 鱼病诊断' };
+
+function showPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    document.getElementById('header-home').style.display = 'none';
+    document.getElementById('header-sub').style.display = 'block';
+    document.getElementById('sub-title').textContent = pageTitles[name];
+    document.querySelectorAll('.nav-item').forEach((n, i) => {
+        n.classList.toggle('active', ['home','price','weather','disease'][i] === name);
+    });
+    if (name === 'price' && !window.chartInited) initPriceChart();
+    if (name === 'weather') loadWeatherData();
+}
+function goHome() {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.getElementById('page-home').classList.add('active');
+    document.getElementById('header-home').style.display = 'block';
+    document.getElementById('header-sub').style.display = 'none';
+    document.querySelectorAll('.nav-item').forEach((n, i) => n.classList.toggle('active', i === 0));
+}
+
+// ============================================================
+// 初始化：获取首页天气概览
+// ============================================================
+async function init() {
+    document.getElementById('locInfo').textContent = '📍 默认定位：平谷区';
+    await loadHomeWeather();
+}
+
+async function loadHomeWeather() {
+    try {
+        // 获取实况
+        const liveResp = await fetch(`/api/weather/live?city=${currentAdcode}`);
+        const liveJson = await liveResp.json();
+        if (liveJson.success) {
+            const d = liveJson.data;
+            document.getElementById('homeTemp').textContent = d.temperature + '°C';
+            document.getElementById('homeWeather').textContent = d.weather + ' · ' + d.winddirection + '风' + d.windpower + '级';
+        }
+
+        // 获取风险
+        const fcResp = await fetch(`/api/weather/forecast?city=${currentAdcode}`);
+        const fcJson = await fcResp.json();
+        if (fcJson.success && fcJson.risk) {
+            const r = fcJson.risk;
+            const riskEl = document.getElementById('homeRisk');
+            riskEl.textContent = r.level;
+            riskEl.style.color = r.classType === 'danger' ? 'var(--danger)' : (r.classType === 'warn' ? 'var(--warning)' : 'var(--success)');
+            document.getElementById('homeRiskSub').textContent = r.days.length > 0 ? `未来${r.days.length}天有降雨` : '近期无降雨';
+        }
+    } catch (e) {
+        document.getElementById('homeTemp').textContent = '--';
+        document.getElementById('homeWeather').textContent = '加载失败';
+        document.getElementById('homeRisk').textContent = '--';
+        document.getElementById('homeRiskSub').textContent = '加载失败';
+    }
+}
+
+// ============================================================
+// 天气模块（调用后端 API）
+// ============================================================
+async function loadWeatherData() {
+    try {
+        const [liveResp, fcResp] = await Promise.all([
+            fetch(`/api/weather/live?city=${currentAdcode}`).then(r => r.json()),
+            fetch(`/api/weather/forecast?city=${currentAdcode}`).then(r => r.json())
+        ]);
+
+        renderLiveWeather(liveResp.success ? liveResp.data : null);
+        renderForecast(fcResp.success ? fcResp.data : null);
+        renderFloodRisk(fcResp.success ? fcResp.risk : null);
+    } catch (err) {
+        console.error('天气加载失败:', err);
+        document.getElementById('weatherContent').innerHTML =
+            `<div class="error-msg">天气数据加载失败<br><span style="font-size:12px">${err.message}</span><br><button class="retry-btn" onclick="loadWeatherData()">重新加载</button></div>`;
+        document.getElementById('forecastContent').innerHTML = '<div class="error-msg">无法加载预报数据</div>';
+        document.getElementById('riskContent').innerHTML = '<div class="error-msg">无法评估风险</div>';
+    }
+}
+
+function weatherEmoji(type) {
+    const map = {
+        '晴': '☀️', '少云': '🌤️', '晴间多云': '⛅', '多云': '⛅',
+        '阴': '☁️', '阵雨': '🌦️', '雷阵雨': '⛈️', '小雨': '🌦️',
+        '中雨': '🌧️', '大雨': '🌧️', '暴雨': '⛈️', '大暴雨': '⛈️',
+        '特大暴雨': '⛈️', '强阵雨': '🌧️', '强雷阵雨': '⛈️',
+        '小雪': '❄️', '中雪': '❄️', '大雪': '❄️', '暴雪': '❄️',
+        '雾': '🌫️', '霾': '🌫️', '浮尘': '🌫️',
+    };
+    return map[type] || '🌈';
+}
+
+function renderLiveWeather(live) {
+    if (!live) {
+        document.getElementById('weatherContent').innerHTML = '<div class="error-msg">暂无实况数据</div>';
+        return;
+    }
+    document.getElementById('weatherCity').textContent = live.city || currentCity;
+    const icon = weatherEmoji(live.weather);
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')}`;
+    document.getElementById('weatherContent').innerHTML = `
+        <div class="weather-now">
+            <div><div class="temp">${live.temperature}°</div></div>
+            <div class="desc">
+                <div style="font-size:36px;margin-bottom:4px">${icon}</div>
+                ${live.weather}<br>
+                <span style="font-size:12px">${live.winddirection || '-'}风 ${live.windpower || '-'}级 | 更新于 ${timeStr}</span>
+            </div>
+        </div>
+        <div class="weather-detail">
+            <div class="item"><div class="dlabel">湿度</div><div class="dval">${live.humidity || '-'}%</div></div>
+            <div class="item"><div class="dlabel">温度</div><div class="dval">${live.temperature}°C</div></div>
+            <div class="item"><div class="dlabel">风力</div><div class="dval">${live.windpower || '-'}级</div></div>
+            <div class="item"><div class="dlabel">省份</div><div class="dval">${live.province || '-'}</div></div>
+        </div>`;
+}
+
+function renderForecast(forecast) {
+    if (!forecast || !forecast.casts || forecast.casts.length === 0) {
+        document.getElementById('forecastContent').innerHTML = '<div class="error-msg">暂无预报数据</div>';
+        return;
+    }
+    const weekDays = ['周日','周一','周二','周三','周四','周五','周六'];
+    let html = '<div class="forecast-scroll">';
+    forecast.casts.forEach((c, i) => {
+        const d = new Date(c.date.replace(/-/g, '/'));
+        const dayLabel = i === 0 ? '今天' : (i === 1 ? '明天' : weekDays[d.getDay()]);
+        const icon = weatherEmoji(c.dayweather);
+        const hasRain = c.dayweather.includes('雨') || c.nightweather.includes('雨');
+        html += `
+            <div class="forecast-item ${i === 0 ? 'today' : ''}">
+                <div class="f-date">${dayLabel}</div>
+                <div class="f-icon">${icon}</div>
+                <div class="f-temp">${c.nighttemp}° <span>~</span> ${c.daytemp}°</div>
+                <div class="f-weather">${c.dayweather}</div>
+                <div class="f-rain" style="color:${hasRain ? 'var(--primary)' : 'var(--text-sub)'}">${hasRain ? '有雨' : '-'}</div>
+            </div>`;
+    });
+    html += '</div>';
+    document.getElementById('forecastContent').innerHTML = html;
+}
+
+function renderFloodRisk(risk) {
+    if (!risk) {
+        document.getElementById('riskContent').innerHTML = '<div class="error-msg">暂无数据</div>';
+        return;
+    }
+
+    const colorMap = { danger: 'var(--danger)', warn: 'var(--warning)', safe: 'var(--success)' };
+    const riskColor = colorMap[risk.classType] || '#ffc107';
+
+    let html = `
+        <p style="font-size:13px;color:#666;margin-bottom:8px">基于后端风险分析引擎</p>
+        <div class="risk-bar"><div class="fill" style="width:${Math.min(100, risk.score)}%;background:${riskColor}"></div></div>
+        <div class="risk-label"><span>安全</span><span>注意</span><span>危险</span></div>
+        <div class="risk-status ${risk.classType}">
+            <div class="risk-dot ${risk.classType}"></div>
+            <span>${risk.level} — ${risk.advice}</span>
+        </div>`;
+
+    if (risk.days && risk.days.length > 0) {
+        html += '<div class="rain-detail">';
+        risk.days.forEach(r => {
+            html += `
+                <div class="rain-row">
+                    <span style="min-width:70px;color:var(--text-sub)">${r.date}</span>
+                    <span style="min-width:70px;font-weight:500">${r.level}</span>
+                    <div class="rain-bar-wrap"><div class="rain-bar-inner" style="width:${r.risk}%;background:${riskColor}"></div></div>
+                    <span class="rain-val" style="color:${riskColor}">${r.level}</span>
+                </div>`;
+        });
+        html += '</div>';
+    }
+
+    if (risk.measures && risk.measures.length > 0) {
+        html += '<div style="margin-top:16px"><div class="card-title" style="margin-bottom:8px">📋 防汛措施</div>';
+        risk.measures.forEach((m, i) => {
+            html += `<p style="font-size:14px;line-height:2;color:#444">${i+1}. <span class="priority-tag priority-${m.priority}">${m.priority}</span>${m.text}</p>`;
+        });
+        html += '</div>';
+    }
+
+    document.getElementById('riskContent').innerHTML = html;
+}
+
+// ============================================================
+// 鱼价预测图表（模拟数据）
+// ============================================================
+function initPriceChart() {
+    window.chartInited = true;
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    const labels = ['7/1','7/3','7/5','7/7','7/9','7/11','7/13','7/15','7/17','7/19','7/21','7/23'];
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels,
+            datasets: [
+                { label: '鲤鱼', data: [7.8,7.5,7.9,8.2,8.0,8.3,8.5,8.5,8.2,7.9,7.7,7.5], borderColor: '#e53935', backgroundColor: 'rgba(229,57,53,0.1)', fill: true, tension: 0.4, pointRadius: 3 },
+                { label: '草鱼', data: [8.0,7.8,7.5,7.3,7.4,7.2,7.0,7.2,7.4,7.6,7.8,8.0], borderColor: '#43a047', backgroundColor: 'rgba(67,160,71,0.1)', fill: true, tension: 0.4, pointRadius: 3 },
+                { label: '鲫鱼', data: [9.5,9.8,10.0,10.2,10.5,10.8,11.0,11.0,11.2,11.3,11.5,11.5], borderColor: '#1a73e8', backgroundColor: 'rgba(26,115,232,0.1)', fill: true, tension: 0.4, pointRadius: 3 }
+            ]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { boxWidth: 12, padding: 16, font: { size: 12 } } },
+                tooltip: { callbacks: { label: ctx => ctx.dataset.label + '：' + ctx.parsed.y + ' 元/斤' } }
+            },
+            scales: {
+                y: { min: 6, max: 13, ticks: { callback: v => v + '元' } },
+                x: { ticks: { font: { size: 11 } } }
+            }
+        }
+    });
+}
+
+// ============================================================
+// 鱼病诊断 — 调用后端 /api/diagnose（后端代理 DeepSeek）
+// ============================================================
+const selectedSymptoms = new Set();
+
+document.querySelectorAll('.symptom-tag').forEach(tag => {
+    tag.addEventListener('click', () => {
+        const id = tag.dataset.id;
+        if (selectedSymptoms.has(id)) {
+            selectedSymptoms.delete(id);
+            tag.classList.remove('selected');
+        } else {
+            selectedSymptoms.add(id);
+            tag.classList.add('selected');
+        }
+        document.getElementById('diagnoseBtn').disabled = selectedSymptoms.size === 0;
+        document.getElementById('resultCard').classList.remove('show');
+    });
+});
+
+async function aiDiagnose() {
+    if (selectedSymptoms.size === 0) return;
+
+    const btn = document.getElementById('diagnoseBtn');
+    btn.textContent = '🤖 AI 分析中...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/diagnose', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                symptoms: Array.from(selectedSymptoms),
+                extraDesc: document.getElementById('extraDesc').value.trim(),
+                location: currentCity
+            })
+        });
+
+        const result = await response.json();
+
+        if (!result.success) {
+            showToast('❌ 诊断失败：' + (result.error || '未知错误'));
+            document.getElementById('resultCard').classList.remove('show');
+            return;
+        }
+
+        lastDiagnosis = result.data;
+        renderDiagnosisResult(result.data, result.aiTime);
+
+    } catch (err) {
+        console.error('诊断请求失败:', err);
+        showToast('❌ 网络错误，请检查服务器是否启动');
+    } finally {
+        btn.textContent = 'AI 智能诊断';
+        btn.disabled = selectedSymptoms.size === 0;
+    }
+}
+
+function renderDiagnosisResult(result, aiTime) {
+    const card = document.getElementById('resultCard');
+
+    document.getElementById('aiTime').textContent = aiTime ? `响应耗时 ${(aiTime / 1000).toFixed(1)}s` : '';
+    document.getElementById('resultName').textContent = result.disease || '未知病害';
+
+    const sev = document.getElementById('resultSeverity');
+    sev.textContent = `${result.severity || '未知'}风险 · 置信度${result.confidence || '?'}`;
+    const sevClass = (result.severity === '高') ? 'high' : (result.severity === '中' ? 'mid' : 'low');
+    sev.className = 'result-severity ' + sevClass;
+
+    document.getElementById('resultDesc').textContent = result.description || '暂无描述';
+    document.getElementById('resultTreatment').textContent = result.treatment || '暂无治疗方案';
+    document.getElementById('resultNote').textContent = result.prevention || '暂无注意事项';
+
+    card.classList.add('show');
+    card.classList.toggle('danger-border', result.severity === '高');
+    document.getElementById('reportBtn').style.display = (result.needReport && result.severity === '高') ? 'block' : 'none';
+
+    card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ============================================================
+// 政府上报 — 调用后端 /api/report
+// ============================================================
+function showReportModal() { document.getElementById('reportModal').classList.add('show'); }
+function closeReportModal() { document.getElementById('reportModal').classList.remove('show'); }
+
+async function confirmReport() {
+    closeReportModal();
+    if (!lastDiagnosis) { showToast('没有可上报的诊断结果'); return; }
+
+    try {
+        const resp = await fetch('/api/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                disease: lastDiagnosis.disease,
+                severity: lastDiagnosis.severity,
+                description: lastDiagnosis.description,
+                treatment: lastDiagnosis.treatment,
+                reportReason: lastDiagnosis.reportReason,
+                location: currentCity
+            })
+        });
+        const result = await resp.json();
+        if (result.success) {
+            showToast(`✅ 上报成功！编号: ${result.reportId}`);
+        } else {
+            showToast('❌ 上报失败：' + (result.error || ''));
+        }
+    } catch (err) {
+        showToast('❌ 上报失败，请检查网络');
+    }
+}
+
+// ============================================================
+// Toast
+// ============================================================
+function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+// ============================================================
+// 启动
+// ============================================================
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
