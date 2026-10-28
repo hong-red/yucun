@@ -152,7 +152,7 @@ const PORT = process.env.PORT || 8383;
 // ============================================================
 const CONFIG = {
     AMAP_KEY: process.env.AMAP_KEY || 'c40aa3998d164cc816e618f7f0a1dbb1',
-    DEEPSEEK_KEY: process.env.DEEPSEEK_KEY || 'sk-9f4bf5c1920b46c49e528a768f9240fa',
+    DEEPSEEK_KEY: process.env.DEEPSEEK_KEY || '',  // 请在环境变量 DEEPSEEK_KEY 中配置，勿提交真实密钥
     DEEPSEEK_URL: 'https://api.deepseek.com/chat/completions',
     AMAP_WEATHER_URL: 'https://restapi.amap.com/v3/weather/weatherInfo',
     AMAP_GEO_URL: 'https://restapi.amap.com/v3/geocode/regeo',
